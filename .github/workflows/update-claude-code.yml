@@ -1,11 +1,8 @@
 name: Update claude-code formula
 
 on:
-  schedule:
-    # Check every 15 minutes
-    - cron: '*/15 * * * *'
   workflow_dispatch:
-    # Allow manual trigger
+    # Triggered by repo-monitor watcher or manually
 
 jobs:
   update:
