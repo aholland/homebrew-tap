@@ -1,4 +1,4 @@
-name: Update claude-code formula
+name: Update claude-code-punctilio formula
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
         id: version
         run: |
           LATEST=$(curl -s "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest")
-          CURRENT=$(grep 'version "' Casks/claude-code.rb | sed 's/.*version "\([^"]*\)".*/\1/')
+          CURRENT=$(grep 'version "' Casks/claude-code-punctilio.rb | sed 's/.*version "\([^"]*\)".*/\1/')
 
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "current=$CURRENT" >> $GITHUB_OUTPUT
@@ -108,14 +108,14 @@ jobs:
           SHA_LINUX_X64: ${{ steps.sha.outputs.x86_64_linux }}
           SHA_LINUX_ARM: ${{ steps.sha.outputs.arm64_linux }}
         run: |
-          sed -i '' "s/version \".*\"/version \"$VERSION\"/" Casks/claude-code.rb
-          sed -i '' "s/arm:          \"[a-f0-9]*\"/arm:          \"$SHA_ARM\"/" Casks/claude-code.rb
-          sed -i '' "s/x86_64:       \"[a-f0-9]*\"/x86_64:       \"$SHA_X64\"/" Casks/claude-code.rb
-          sed -i '' "s/x86_64_linux: \"[a-f0-9]*\"/x86_64_linux: \"$SHA_LINUX_X64\"/" Casks/claude-code.rb
-          sed -i '' "s/arm64_linux:  \"[a-f0-9]*\"/arm64_linux:  \"$SHA_LINUX_ARM\"/" Casks/claude-code.rb
+          sed -i '' "s/version \".*\"/version \"$VERSION\"/" Casks/claude-code-punctilio.rb
+          sed -i '' "s/arm:          \"[a-f0-9]*\"/arm:          \"$SHA_ARM\"/" Casks/claude-code-punctilio.rb
+          sed -i '' "s/x86_64:       \"[a-f0-9]*\"/x86_64:       \"$SHA_X64\"/" Casks/claude-code-punctilio.rb
+          sed -i '' "s/x86_64_linux: \"[a-f0-9]*\"/x86_64_linux: \"$SHA_LINUX_X64\"/" Casks/claude-code-punctilio.rb
+          sed -i '' "s/arm64_linux:  \"[a-f0-9]*\"/arm64_linux:  \"$SHA_LINUX_ARM\"/" Casks/claude-code-punctilio.rb
 
           echo "Updated cask to version $VERSION"
-          cat Casks/claude-code.rb
+          cat Casks/claude-code-punctilio.rb
 
       - name: Commit and push
         if: steps.version.outputs.needs_update == 'true'
@@ -125,8 +125,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/claude-code.rb
-          git commit -m "Update claude-code to $VERSION"
+          git add Casks/claude-code-punctilio.rb
+          git commit -m "Update claude-code-punctilio to $VERSION"
           git push
 
           echo "✓ Formula updated: $CURRENT → $VERSION"

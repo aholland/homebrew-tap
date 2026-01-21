@@ -1,4 +1,4 @@
-cask "claude-code" do
+cask "claude-code-punctilio" do
   arch arm: "arm64", intel: "x64"
   os macos: "darwin", linux: "linux"
 
