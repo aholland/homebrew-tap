@@ -2,11 +2,11 @@ cask "claude-code-punctilio" do
   arch arm: "arm64", intel: "x64"
   os macos: "darwin", linux: "linux"
 
-  version "2.1.31"
-  sha256 arm:          "8ae572cf525b2eec2da17a9100355413c4d59a43c124733e5cf1356dc50a576a",
-         x86_64:       "085e56afd75c861b37dc5269bb4c7277baa836cf6c0617c8d405cd570dc189d7",
-         x86_64_linux: "ea0da67ac8554a11bdf1da9659ae2a29b497f3e4a36ba3e776c68b7a65f52fea",
-         arm64_linux:  "0999b04ab563343c56ac1b8c335927aeab3ea3402d5bd85e061e6e0cb3226c26"
+  version "2.1.37"
+  sha256 arm:          "00ed10afb7a562440773de31284568ce9c33385d79d3a912a12af262aefd130e",
+         x86_64:       "5ad9639bf34affa47066fb98f2d7ad7b0f236009744d309077b194d896fc011d",
+         x86_64_linux: "f967a4d06e16a32436b6329e2dbed459a9fa4d34f07635a1fb271b74f706c91f",
+         arm64_linux:  "d725cc73060f400a7ac03a769969397daec9d411dbd5b1c7bb1fa60427bf657e"
 
   url "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/#{version}/#{os}-#{arch}/claude",
       verified: "storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/"
