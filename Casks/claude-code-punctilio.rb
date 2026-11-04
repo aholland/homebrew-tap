@@ -8,8 +8,7 @@ cask "claude-code-punctilio" do
          x86_64_linux: "708c77b204db30086ff6f1ed34577bda03e1be74ced80557cbf7b54249ebf0bd",
          arm64_linux:  "53a0d7e219d7b0804ecba5dbc002745e89f786cc946d2de85a6470d5b2d1fb06"
 
-  url "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/#{version}/#{os}-#{arch}/claude",
-      verified: "storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/"
+  url "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/#{version}/#{os}-#{arch}/claude"
   name "Claude Code"
   desc "Terminal-based AI coding assistant"
   homepage "https://www.anthropic.com/claude-code"
@@ -18,6 +17,11 @@ cask "claude-code-punctilio" do
     url "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest"
     regex(/^v?(\d+(?:\.\d+)+)$/i)
   end
+
+  disable! date:             "2026-11-05",
+           because:          "is paused in favour of claude-code@latest, which tracks the same release channel; " \
+                             "it may return later",
+           replacement_cask: "claude-code@latest"
 
   binary "claude"
 
