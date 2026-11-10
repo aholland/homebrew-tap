@@ -33,6 +33,7 @@ Other facts the user may ask about:
 - It reads one public file, this tap's cask on GitHub, at most once every 10 minutes, in the background. It sends nothing about the user.
 - It keeps a few small files in `~/.cache/claude-code-punctilio/` (or under `$XDG_CACHE_HOME` if that is set).
 - It honours Claude Code's own switches. If `DISABLE_AUTOUPDATER` or `DISABLE_UPDATES` is on, it stays silent. If `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE` is on, it runs the upgrade itself in the background, exactly as Claude Code does for Homebrew's own casks, then shows the "restart to apply" line. The upgrade's output goes to `upgrade.log` in the cache folder. A failed upgrade is retried after 30 minutes.
+- It finds `claude` on the `PATH` the status line runs with, and uses the `brew` in the same folder. If `claude` is not on that `PATH`, it prints nothing; step 1 of "Test it" would show that.
 - Those switches must reach the script as environment variables. After installing, check that they do (see "Test it"). If the user sets them in the `env` block of `settings.json` and they do not arrive, tell the user.
 
 ## The helper script
@@ -65,11 +66,13 @@ is_fresh() {
   [ -n "$(find "$1" -prune -mmin -"$2" 2>/dev/null)" ]
 }
 
-# Only for a Claude Code that this cask installed.
+# Only for a Claude Code that this cask installed. brew puts its own command
+# in the same folder as the claude link, so brew is found there, not on PATH.
 claude_link="$(command -v claude)" || exit 0
 installed="$(readlink "$claude_link" 2>/dev/null |
   sed -n "s#.*/Caskroom/$cask/\([^/]*\)/.*#\1#p")"
 [ -n "$installed" ] || exit 0
+brew="$(dirname "$claude_link")/brew"
 
 # Respect Claude Code's own switches for turning update checks off.
 if is_on "$DISABLE_AUTOUPDATER" || is_on "$DISABLE_UPDATES"; then exit 0; fi
@@ -111,7 +114,11 @@ manual="brew update && brew upgrade --cask $cask"
 
 # The user has asked Claude Code to upgrade through the package manager by
 # itself (CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE), so do that here too.
-if is_on "$CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE" && command -v brew >/dev/null; then
+if is_on "$CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE"; then
+  if [ ! -x "$brew" ]; then
+    echo "Claude Code $latest: cannot upgrade, no brew at $brew · run: $manual"
+    exit 0
+  fi
   if [ -d "$state/upgrading" ] && is_fresh "$state/upgrading" "$retry_minutes"; then
     echo "Claude Code $latest: upgrading…"
     exit 0
@@ -124,7 +131,7 @@ if is_on "$CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE" && command -v brew >/dev/nul
   if mkdir "$state/upgrading" 2>/dev/null; then
     : >"$state/upgrade-tried"
     (
-      brew update && brew upgrade --cask "aholland/tap/$cask"
+      "$brew" update && "$brew" upgrade --cask "aholland/tap/$cask"
       rmdir "$state/upgrading"
     ) >"$state/upgrade.log" 2>&1 &
   fi

@@ -7,9 +7,9 @@
 # each release folder holds a manifest.json listing the SHA-256 of every
 # platform binary, and a manifest.json.sig made with Anthropic's release
 # signing key. This script checks that signature against the copy of the key
-# pinned in keys/claude-code.asc, then writes the manifest's checksums into
-# the cask. brew checks every download against those checksums at install
-# time, so the binaries themselves never pass through this tap.
+# pinned in keys/claude-code.asc, downloads each binary to confirm it matches
+# the manifest's checksum, then writes those checksums into the cask. brew
+# checks every download against them again at install time.
 #
 # Any failed check stops the script with an error. It never downgrades.
 set -euo pipefail
@@ -54,22 +54,25 @@ curl -fsSL "$RELEASES/$VERSION/manifest.json.sig" -o "$WORK/manifest.json.sig" |
 gpgv --keyring "$WORK/key.gpg" "$WORK/manifest.json.sig" "$WORK/manifest.json" ||
   die "manifest.json for $VERSION is not signed by Anthropic's release key"
 
-# 3. The manifest is for this version, and every binary it lists is published.
+# 3. The manifest is for this version, and every binary it lists is published
+#    and has the checksum the manifest gives.
 MANIFEST_VERSION="$(jq -r '.version' "$WORK/manifest.json")"
 [[ "$MANIFEST_VERSION" == "$VERSION" ]] ||
   die "manifest.json says version '$MANIFEST_VERSION', expected $VERSION"
 
+sha256_of_stdin() {
+  if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1
+}
 checksum_for() {
-  local platform="$1" sum size published
-  sum="$(jq -r --arg p "$platform" '.platforms[$p].checksum' "$WORK/manifest.json")"
-  size="$(jq -r --arg p "$platform" '.platforms[$p].size' "$WORK/manifest.json")"
-  [[ "$sum" =~ ^[a-f0-9]{64}$ ]] || die "manifest has no SHA-256 for $platform"
-  published="$(curl -fsSIL "$RELEASES/$VERSION/$platform/claude" |
-    tr -d '\r' | awk 'tolower($1) == "content-length:" { n = $2 } END { print n }')" ||
-    die "the $platform binary for $VERSION is not published yet"
-  [[ "$published" == "$size" ]] ||
-    die "the $platform binary is $published bytes, manifest says $size"
-  echo "$sum"
+  local platform="$1" expected actual
+  expected="$(jq -r --arg p "$platform" '.platforms[$p].checksum' "$WORK/manifest.json")"
+  [[ "$expected" =~ ^[a-f0-9]{64}$ ]] || die "manifest has no SHA-256 for $platform"
+  actual="$(curl -fsSL "$RELEASES/$VERSION/$platform/claude" | sha256_of_stdin)" ||
+    die "could not download the $platform binary for $VERSION"
+  [[ "$actual" == "$expected" ]] ||
+    die "the $platform binary has SHA-256 $actual, manifest says $expected"
+  echo "Checked $platform" >&2
+  echo "$expected"
 }
 SHA_ARM="$(checksum_for darwin-arm64)"
 SHA_X86_64="$(checksum_for darwin-x64)"
