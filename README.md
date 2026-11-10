@@ -27,17 +27,15 @@ It installs the same binary as Homebrew's own casks, straight from Anthropic's s
 Claude Code's built-in "update available" notice cannot see this tap, so on this cask it stays quiet. To get a notice in your status line instead, give Claude Code this:
 
 ```
-Please add the claude-code-punctilio update notice
-to my status line, following
+Please add the claude-code-punctilio update notice to my status line, following
 https://raw.githubusercontent.com/aholland/homebrew-tap/main/UPDATE-NOTICE.md
-It should only add one helper script under ~/.claude
-and a call to it from my status line.
+It should only add one helper script under ~/.claude and a call to it from my status line.
 Show me the changes before you make them.
 ```
 
 The page it points to is [`UPDATE-NOTICE.md`](UPDATE-NOTICE.md). It is short enough to read first, and you can ask your Claude Code whether it looks safe.
 
-If you have set `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE=1`, the notice also runs the upgrade for you in the background, the same as Claude Code does for Homebrew's own casks. Either way a new version takes effect when you restart Claude Code.
+Claude Code can upgrade itself through Homebrew in the background if you ask it to, as described under [Auto-updates](https://code.claude.com/docs/en/setup#auto-updates) in Anthropic's setup guide: you set `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE=1`. If you have done that, the notice runs the upgrade for you too, the same as Claude Code does for Homebrew's own casks. Either way a new version takes effect when you restart Claude Code.
 
 ### This is earlier than "latest"
 
