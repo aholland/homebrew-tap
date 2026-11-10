@@ -128,9 +128,65 @@ export async function check(env, now = Date.now()) {
   return { current, latest, target, action: "dispatched" };
 }
 
+// ---------------------------------------------------------------------------
+// Release timeline. Each minute the Worker also notes where a release has got
+// to, and records the moment any of these changes, in the TIMELINE KV store:
+//   uploaded        newest version with a manifest.json on Anthropic's server
+//   tapCask         version in this tap's cask
+//   anthropicLatest Anthropic's "latest" pointer
+//   npmLatest       npm's "latest" label (what a plain `npm install` fetches)
+//   npmNext         npm's "next" label
+//   homebrewLatest  Homebrew's claude-code@latest, as served by formulae.brew.sh
+// Times are when this Worker first saw the change, so they are up to a minute
+// late. Read the record with `wrangler kv key get timeline --binding TIMELINE`.
+
+async function json(url) {
+  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  if (!response.ok) throw new Error(`${url}: ${response.status}`);
+  return response.json();
+}
+
+export async function observe(env, result, now = Date.now()) {
+  if (!env.TIMELINE) throw new Error("the TIMELINE KV binding is missing");
+  const [npm, homebrew] = await Promise.all([
+    json("https://registry.npmjs.org/-/package/@anthropic-ai/claude-code/dist-tags"),
+    json("https://formulae.brew.sh/api/cask/claude-code@latest.json"),
+  ]);
+  const seen = {
+    uploaded: result.target ?? result.current,
+    tapCask: result.current,
+    anthropicLatest: result.latest,
+    npmLatest: npm.latest,
+    npmNext: npm.next,
+    homebrewLatest: homebrew.version,
+  };
+
+  const previous = await env.TIMELINE.get("state", "json");
+  const at = new Date(now).toISOString();
+  const events = [];
+  for (const [what, value] of Object.entries(seen)) {
+    if (!previous) events.push({ at, what, value, note: "first observation" });
+    else if (previous[what] !== value) events.push({ at, what, from: previous[what], value });
+  }
+  if (result.action === "dispatched") events.push({ at, what: "workflowStarted", value: result.target });
+  if (events.length === 0) return events;
+
+  const timeline = (await env.TIMELINE.get("timeline", "json")) ?? [];
+  await env.TIMELINE.put("timeline", JSON.stringify([...timeline, ...events]));
+  await env.TIMELINE.put("state", JSON.stringify(seen));
+  return events;
+}
+
 export default {
   async scheduled(_event, env, ctx) {
-    // A thrown error is recorded by Cloudflare as a failed invocation.
-    ctx.waitUntil(check(env).then((result) => console.log(JSON.stringify(result))));
+    // A thrown error is recorded by Cloudflare as a failed invocation. The
+    // timeline is noted after the real work, so it can never hold that up.
+    ctx.waitUntil((async () => {
+      const now = Date.now();
+      const result = await check(env, now);
+      console.log(JSON.stringify(result));
+      const events = await observe(env, result, now);
+      if (events.length > 0) console.log(JSON.stringify({ timeline: events }));
+    })());
   },
 };

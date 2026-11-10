@@ -12,3 +12,8 @@ enabled = true
 
 # One secret, set with `wrangler secret put GITHUB_TOKEN`: a fine-grained
 # GitHub token limited to aholland/homebrew-tap with "Actions: Read and write".
+
+# Where the Worker records the release timeline (see worker.js).
+[[kv_namespaces]]
+binding = "TIMELINE"
+id = "ef7dfe5380e04c4ca15b07a04e2c072c"
