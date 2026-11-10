@@ -1,0 +1,14 @@
+name = "punctilio-watcher"
+main = "worker.js"
+compatibility_date = "2026-06-01"
+# No public URL: the Worker only runs on its schedule.
+workers_dev = false
+
+[triggers]
+crons = ["* * * * *"]
+
+[observability]
+enabled = true
+
+# One secret, set with `wrangler secret put GITHUB_TOKEN`: a fine-grained
+# GitHub token limited to aholland/homebrew-tap with "Actions: Read and write".
