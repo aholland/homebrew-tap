@@ -2,11 +2,11 @@ cask "claude-code-punctilio" do
   arch arm: "arm64", intel: "x64"
   os macos: "darwin", linux: "linux"
 
-  version "2.1.324"
-  sha256 arm:          "4f91ea2cc07280b01768fc581fdb9209420e040aed1765120ff8a01daa7c0a74",
-         x86_64:       "b02d5345916f2c8ec78ef05084c8904c40445d8c46ab1a9518b6c29f92e1b54c",
-         arm64_linux:  "dafaf839aba19d081f7a7c69ef0fd0570528f1493a5f3d532cfb6b939ce97f3e",
-         x86_64_linux: "bf6a59f62a3116d673260b6098cf35898cfdf336e677d73c3416fdb51f03c2f7"
+  version "2.1.325"
+  sha256 arm:          "84590fefe6338be9087f5814b61f9a54c5f21524163a4c127cb5a808e31009f2",
+         x86_64:       "af9760c59f947044e2a0d5072343de563f31efb68bd18ccee4f43c5240570de7",
+         arm64_linux:  "7b6e484b1989a5a14a4b354709ccc8672518a3ec5b9ccd7981fc6254327fde67",
+         x86_64_linux: "0dc4f4a9a165fc60746d7ae8489712e5fc352f1e7ad4eb22e7141bd0812eb0cf"
 
   url "https://downloads.claude.ai/claude-code-releases/#{version}/#{os}-#{arch}/claude"
   name "Claude Code"
