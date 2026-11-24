@@ -11,8 +11,8 @@
 # the manifest's checksum, then writes those checksums into the cask. brew
 # checks every download against them again at install time.
 #
-# It also writes the time Anthropic uploaded the release (the manifest's
-# Last-Modified) into the cask as a comment. That is for people, and for the
+# It also writes the time Anthropic uploaded the release, to the microsecond,
+# into the cask as a comment. That is for people, and for the
 # update notice in UPDATE-NOTICE.md; brew ignores it.
 #
 # Any failed check stops the script with an error. It never downgrades.
@@ -83,11 +83,24 @@ SHA_X86_64="$(checksum_for darwin-x64)"
 SHA_ARM64_LINUX="$(checksum_for linux-arm64)"
 SHA_X86_64_LINUX="$(checksum_for linux-x64)"
 
-# 4. When Anthropic uploaded the release, in UTC.
-LAST_MODIFIED="$(tr -d '\r' <"$WORK/manifest.headers" | grep -i '^last-modified: ' | tail -n 1 | cut -d' ' -f2-)"
-[[ -n "$LAST_MODIFIED" ]] || die "manifest.json for $VERSION came without a Last-Modified time"
-UPLOADED="$(perl -MTime::Piece -e 'print Time::Piece->strptime($ARGV[0], "%a, %d %b %Y %H:%M:%S GMT")->strftime("%Y-%m-%dT%H:%M:%SZ")' "$LAST_MODIFIED")" ||
-  die "could not read the Last-Modified time '$LAST_MODIFIED'"
+# 4. When Anthropic uploaded the release, in UTC to the microsecond. The
+#    bucket's x-goog-generation is the upload time in microseconds; it must
+#    agree with Last-Modified, which has whole seconds only.
+header() {
+  tr -d '\r' <"$WORK/manifest.headers" | grep -i "^$1: " | tail -n 1 | cut -d' ' -f2-
+}
+GENERATION="$(header x-goog-generation)"
+LAST_MODIFIED="$(header last-modified)"
+[[ "$GENERATION" =~ ^[0-9]{16}$ ]] ||
+  die "manifest.json for $VERSION has no usable x-goog-generation ('$GENERATION')"
+UPLOADED="$(perl -MTime::Piece -e '
+  my ($generation, $last_modified) = @ARGV;
+  my $t = gmtime(int($generation / 1e6));
+  $t->strftime("%a, %d %b %Y %H:%M:%S GMT") eq $last_modified or
+    die "x-goog-generation $generation is not Last-Modified $last_modified\n";
+  printf "%s.%06dZ", $t->strftime("%Y-%m-%dT%H:%M:%S"), $generation % 1000000;
+' "$GENERATION" "$LAST_MODIFIED")" ||
+  die "could not work out when $VERSION was uploaded"
 export VERSION SHA_ARM SHA_X86_64 SHA_ARM64_LINUX SHA_X86_64_LINUX UPLOADED
 
 # 5. Write them into the cask, and confirm every value landed.

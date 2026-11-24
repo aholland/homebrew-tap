@@ -24,16 +24,16 @@ It is called with one argument, the version of Claude Code that is running, and 
 | Situation | It prints |
 |---|---|
 | The tap has a newer version | `Claude Code 2.1.400 available · run: brew update && brew upgrade --cask claude-code-punctilio` |
-| That version is installed but the session still runs the old one | `Claude Code 2.1.400 installed 11:06, 4 min after release · restart to apply` |
+| That version is installed but the session still runs the old one | `punctilio! 2.1.400 11:06 4m09.025692s` |
 | The tap is not ahead, or Claude Code was not installed from this cask | nothing |
 | The check has been failing for over an hour | `punctilio: update check is failing` |
 
 Other facts the user may ask about:
 
 - It reads one public file, this tap's cask on GitHub, at most once every 10 minutes, in the background. It sends nothing about the user.
-- In the "installed" line, the time is when Homebrew installed that version (the day is added if it was not today), and the delay is from when Anthropic uploaded the release. The tap writes the upload time into the cask as a comment.
+- In the "punctilio!" line, the time is when Homebrew installed that version (the day is added if it was not today), and the delay after it runs from when Anthropic uploaded the release to that install, to the microsecond. The tap writes the upload time into the cask as a comment.
 - It keeps a few small files in `~/.cache/claude-code-punctilio/` (or under `$XDG_CACHE_HOME` if that is set).
-- It honours Claude Code's own switches. If `DISABLE_AUTOUPDATER` or `DISABLE_UPDATES` is on, it stays silent. If `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE` is on, it runs the upgrade itself in the background, exactly as Claude Code does for Homebrew's own casks, then shows the "restart to apply" line. The upgrade's output goes to `upgrade.log` in the cache folder. A failed upgrade is retried after 30 minutes.
+- It honours Claude Code's own switches. If `DISABLE_AUTOUPDATER` or `DISABLE_UPDATES` is on, it stays silent. If `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE` is on, it runs the upgrade itself in the background, exactly as Claude Code does for Homebrew's own casks, then shows the "punctilio!" line. The upgrade's output goes to `upgrade.log` in the cache folder. A failed upgrade is retried after 30 minutes.
 - It finds `claude` on the `PATH` the status line runs with, and uses the `brew` in the same folder. If `claude` is not on that `PATH`, it prints nothing; step 1 of "Test it" would show that.
 - Those switches must reach the script as environment variables. After installing, check that they do (see "Test it"). If the user sets them in the `env` block of `settings.json` and they do not arrive, tell the user.
 
@@ -78,30 +78,40 @@ utc_seconds() {
 local_time() {
   if [ "$(uname)" = Darwin ]; then date -r "$1" +"$2"; else date -d "@$1" +"$2"; fi
 }
-# When brew installed this version, and how long after Anthropic uploaded it.
-# brew names each install's metadata folder after its UTC time; the tap's cask
-# carries the upload time in a comment.
+# When brew installed this version, and how long after Anthropic uploaded it,
+# to the microsecond. brew makes a metadata folder for each install, named
+# after its UTC time to the millisecond; the folder's creation time has the
+# microseconds. The tap's cask carries the upload time in a comment.
 install_time() {
-  stamp="$(ls "$caskroom/.metadata/$installed" 2>/dev/null | sort | tail -n 1 | cut -c1-14)"
-  if [ -z "$stamp" ]; then
-    printf '(install time not found)'
-    return
+  folder="$(ls -d "$caskroom/.metadata/$installed"/*.* 2>/dev/null | sort | tail -n 1)"
+  if [ "$(uname)" = Darwin ]; then
+    born="$(stat -f %.6FB "$folder" 2>/dev/null)"
+  else
+    born="$(stat -c %.6W "$folder" 2>/dev/null)"
   fi
-  at="$(utc_seconds "$stamp")"
+  case "$born" in
+    1[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].[0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+    *) printf '(install time not found)'; return ;;
+  esac
+  at="${born%.*}"
   if [ "$(local_time "$at" %F)" = "$(date +%F)" ]; then
     printf '%s' "$(local_time "$at" %H:%M)"
   else
     printf '%s' "$(local_time "$at" '%a %H:%M')"
   fi
-  if [ -z "$uploaded" ]; then
-    printf ' (upload time not in the cask)'
-    return
-  fi
-  minutes=$(((at - $(utc_seconds "$(echo "$uploaded" | tr -d 'TZ:-')")) / 60))
-  if [ "$minutes" -lt 60 ]; then
-    printf ', %s min after release' "$minutes"
+  # The upload time is YYYY-MM-DDTHH:MM:SS.uuuuuuZ.
+  up="$(echo "$uploaded" | tr -d 'TZ:-')"
+  case "$up" in
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].[0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+    *) printf ' (no upload time in the cask)'; return ;;
+  esac
+  # A leading 1 stops a fraction such as 025692 being read as octal.
+  delay=$(((at - $(utc_seconds "${up%.*}")) * 1000000 + 1${born#*.} - 1${up#*.}))
+  s=$((delay / 1000000 % 60)) us=$((delay % 1000000))
+  if [ "$delay" -lt 3600000000 ]; then
+    printf ' %dm%02d.%06ds' $((delay / 60000000)) "$s" "$us"
   else
-    printf ', %s h %s min after release' $((minutes / 60)) $((minutes % 60))
+    printf ' %dh%02dm%02d.%06ds' $((delay / 3600000000)) $((delay / 60000000 % 60)) "$s" "$us"
   fi
 }
 
@@ -127,7 +137,7 @@ if ! is_fresh "$state/checked" "$check_minutes"; then
       latest="$(echo "$rb" | sed -n 's/^  version "\([0-9.]*\)"$/\1/p')" &&
       [ -n "$latest" ]; then
       uploaded="$(echo "$rb" |
-        sed -n 's/^  # Anthropic uploaded this release at \([0-9TZ:-]*\)$/\1/p')"
+        sed -n 's/^  # Anthropic uploaded this release at \([0-9TZ:.-]*\)$/\1/p')"
       printf '%s\n%s\n' "$latest" "$uploaded" >"$state/latest.tmp" &&
         mv "$state/latest.tmp" "$state/latest" && rm -f "$state/check-failed"
     else
@@ -150,7 +160,7 @@ newest="$(printf '%s\n%s\n' "$running" "$latest" | sort -V | tail -n 1)"
 [ "$newest" = "$latest" ] || exit 0
 
 if [ "$installed" = "$latest" ]; then
-  echo "Claude Code $latest installed $(install_time) · restart to apply"
+  echo "punctilio! $latest $(install_time)"
   exit 0
 fi
 
