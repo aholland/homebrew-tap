@@ -11,6 +11,10 @@
 # the manifest's checksum, then writes those checksums into the cask. brew
 # checks every download against them again at install time.
 #
+# It also writes the time Anthropic uploaded the release (the manifest's
+# Last-Modified) into the cask as a comment. That is for people, and for the
+# update notice in UPDATE-NOTICE.md; brew ignores it.
+#
 # Any failed check stops the script with an error. It never downgrades.
 set -euo pipefail
 
@@ -47,7 +51,7 @@ PINNED="$(GNUPGHOME="$WORK" gpg --show-keys --with-colons "$KEY" 2>/dev/null |
 GNUPGHOME="$WORK" gpg --dearmor <"$KEY" >"$WORK/key.gpg" 2>/dev/null
 
 # 2. The manifest is signed by that key.
-curl -fsSL "$RELEASES/$VERSION/manifest.json" -o "$WORK/manifest.json" ||
+curl -fsSL -D "$WORK/manifest.headers" "$RELEASES/$VERSION/manifest.json" -o "$WORK/manifest.json" ||
   die "no manifest.json for $VERSION"
 curl -fsSL "$RELEASES/$VERSION/manifest.json.sig" -o "$WORK/manifest.json.sig" ||
   die "no manifest.json.sig for $VERSION"
@@ -78,17 +82,24 @@ SHA_ARM="$(checksum_for darwin-arm64)"
 SHA_X86_64="$(checksum_for darwin-x64)"
 SHA_ARM64_LINUX="$(checksum_for linux-arm64)"
 SHA_X86_64_LINUX="$(checksum_for linux-x64)"
-export VERSION SHA_ARM SHA_X86_64 SHA_ARM64_LINUX SHA_X86_64_LINUX
 
-# 4. Write them into the cask, and confirm every value landed.
+# 4. When Anthropic uploaded the release, in UTC.
+LAST_MODIFIED="$(tr -d '\r' <"$WORK/manifest.headers" | grep -i '^last-modified: ' | tail -n 1 | cut -d' ' -f2-)"
+[[ -n "$LAST_MODIFIED" ]] || die "manifest.json for $VERSION came without a Last-Modified time"
+UPLOADED="$(perl -MTime::Piece -e 'print Time::Piece->strptime($ARGV[0], "%a, %d %b %Y %H:%M:%S GMT")->strftime("%Y-%m-%dT%H:%M:%SZ")' "$LAST_MODIFIED")" ||
+  die "could not read the Last-Modified time '$LAST_MODIFIED'"
+export VERSION SHA_ARM SHA_X86_64 SHA_ARM64_LINUX SHA_X86_64_LINUX UPLOADED
+
+# 5. Write them into the cask, and confirm every value landed.
 perl -pi -e '
+  s/^(  # Anthropic uploaded this release at )\S+/$1$ENV{UPLOADED}/;
   s/^(  version ")[^"]*"/$1$ENV{VERSION}"/;
   s/(\barm:\s+")[a-f0-9]{64}/$1$ENV{SHA_ARM}/;
   s/(\bx86_64:\s+")[a-f0-9]{64}/$1$ENV{SHA_X86_64}/;
   s/(\barm64_linux:\s+")[a-f0-9]{64}/$1$ENV{SHA_ARM64_LINUX}/;
   s/(\bx86_64_linux:\s+")[a-f0-9]{64}/$1$ENV{SHA_X86_64_LINUX}/;
 ' "$CASK"
-for value in "version \"$VERSION\"" "$SHA_ARM" "$SHA_X86_64" "$SHA_ARM64_LINUX" "$SHA_X86_64_LINUX"; do
+for value in "uploaded this release at $UPLOADED" "version \"$VERSION\"" "$SHA_ARM" "$SHA_X86_64" "$SHA_ARM64_LINUX" "$SHA_X86_64_LINUX"; do
   grep -qF "$value" "$CASK" || die "$CASK was not updated with: $value"
 done
 

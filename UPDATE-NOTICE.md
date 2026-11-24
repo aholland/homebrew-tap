@@ -24,13 +24,14 @@ It is called with one argument, the version of Claude Code that is running, and 
 | Situation | It prints |
 |---|---|
 | The tap has a newer version | `Claude Code 2.1.400 available · run: brew update && brew upgrade --cask claude-code-punctilio` |
-| That version is installed but the session still runs the old one | `Claude Code 2.1.400 installed · restart to apply` |
+| That version is installed but the session still runs the old one | `Claude Code 2.1.400 installed 11:06, 4 min after release · restart to apply` |
 | The tap is not ahead, or Claude Code was not installed from this cask | nothing |
 | The check has been failing for over an hour | `punctilio: update check is failing` |
 
 Other facts the user may ask about:
 
 - It reads one public file, this tap's cask on GitHub, at most once every 10 minutes, in the background. It sends nothing about the user.
+- In the "installed" line, the time is when Homebrew installed that version (the day is added if it was not today), and the delay is from when Anthropic uploaded the release. The tap writes the upload time into the cask as a comment.
 - It keeps a few small files in `~/.cache/claude-code-punctilio/` (or under `$XDG_CACHE_HOME` if that is set).
 - It honours Claude Code's own switches. If `DISABLE_AUTOUPDATER` or `DISABLE_UPDATES` is on, it stays silent. If `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE` is on, it runs the upgrade itself in the background, exactly as Claude Code does for Homebrew's own casks, then shows the "restart to apply" line. The upgrade's output goes to `upgrade.log` in the cache folder. A failed upgrade is retried after 30 minutes.
 - It finds `claude` on the `PATH` the status line runs with, and uses the `brew` in the same folder. If `claude` is not on that `PATH`, it prints nothing; step 1 of "Test it" would show that.
@@ -65,13 +66,52 @@ is_on() {
 is_fresh() {
   [ -n "$(find "$1" -prune -mmin -"$2" 2>/dev/null)" ]
 }
+# Seconds since 1970 for a UTC time written as YYYYMMDDHHMMSS.
+utc_seconds() {
+  if [ "$(uname)" = Darwin ]; then
+    date -j -u -f %Y%m%d%H%M%S "$1" +%s
+  else
+    date -u -d "$(echo "$1" | sed 's/\(....\)\(..\)\(..\)\(..\)\(..\)\(..\)/\1-\2-\3 \4:\5:\6/')" +%s
+  fi
+}
+# Local time for SECONDS, in FORMAT.
+local_time() {
+  if [ "$(uname)" = Darwin ]; then date -r "$1" +"$2"; else date -d "@$1" +"$2"; fi
+}
+# When brew installed this version, and how long after Anthropic uploaded it.
+# brew names each install's metadata folder after its UTC time; the tap's cask
+# carries the upload time in a comment.
+install_time() {
+  stamp="$(ls "$caskroom/.metadata/$installed" 2>/dev/null | sort | tail -n 1 | cut -c1-14)"
+  if [ -z "$stamp" ]; then
+    printf '(install time not found)'
+    return
+  fi
+  at="$(utc_seconds "$stamp")"
+  if [ "$(local_time "$at" %F)" = "$(date +%F)" ]; then
+    printf '%s' "$(local_time "$at" %H:%M)"
+  else
+    printf '%s' "$(local_time "$at" '%a %H:%M')"
+  fi
+  if [ -z "$uploaded" ]; then
+    printf ' (upload time not in the cask)'
+    return
+  fi
+  minutes=$(((at - $(utc_seconds "$(echo "$uploaded" | tr -d 'TZ:-')")) / 60))
+  if [ "$minutes" -lt 60 ]; then
+    printf ', %s min after release' "$minutes"
+  else
+    printf ', %s h %s min after release' $((minutes / 60)) $((minutes % 60))
+  fi
+}
 
 # Only for a Claude Code that this cask installed. brew puts its own command
 # in the same folder as the claude link, so brew is found there, not on PATH.
 claude_link="$(command -v claude)" || exit 0
-installed="$(readlink "$claude_link" 2>/dev/null |
-  sed -n "s#.*/Caskroom/$cask/\([^/]*\)/.*#\1#p")"
+target="$(readlink "$claude_link" 2>/dev/null)"
+installed="$(echo "$target" | sed -n "s#.*/Caskroom/$cask/\([^/]*\)/.*#\1#p")"
 [ -n "$installed" ] || exit 0
+caskroom="$(echo "$target" | sed -n "s#\(.*/Caskroom/$cask\)/.*#\1#p")"
 brew="$(dirname "$claude_link")/brew"
 
 # Respect Claude Code's own switches for turning update checks off.
@@ -83,9 +123,12 @@ mkdir -p "$state" || exit 1
 if ! is_fresh "$state/checked" "$check_minutes"; then
   : >"$state/checked"
   (
-    if latest="$(curl -fsSL --max-time 15 "$cask_url" |
-      sed -n 's/^  version "\([0-9.]*\)"$/\1/p')" && [ -n "$latest" ]; then
-      printf '%s\n' "$latest" >"$state/latest.tmp" &&
+    if rb="$(curl -fsSL --max-time 15 "$cask_url")" &&
+      latest="$(echo "$rb" | sed -n 's/^  version "\([0-9.]*\)"$/\1/p')" &&
+      [ -n "$latest" ]; then
+      uploaded="$(echo "$rb" |
+        sed -n 's/^  # Anthropic uploaded this release at \([0-9TZ:-]*\)$/\1/p')"
+      printf '%s\n%s\n' "$latest" "$uploaded" >"$state/latest.tmp" &&
         mv "$state/latest.tmp" "$state/latest" && rm -f "$state/check-failed"
     else
       date >"$state/check-failed"
@@ -99,14 +142,15 @@ if [ -f "$state/check-failed" ] && ! is_fresh "$state/latest" 60; then
   exit 0
 fi
 
-latest="$(cat "$state/latest" 2>/dev/null)"
+latest="$(sed -n 1p "$state/latest" 2>/dev/null)"
+uploaded="$(sed -n 2p "$state/latest" 2>/dev/null)"
 [ -n "$latest" ] || exit 0
 [ "$latest" != "$running" ] || exit 0
 newest="$(printf '%s\n%s\n' "$running" "$latest" | sort -V | tail -n 1)"
 [ "$newest" = "$latest" ] || exit 0
 
 if [ "$installed" = "$latest" ]; then
-  echo "Claude Code $latest installed · restart to apply"
+  echo "Claude Code $latest installed $(install_time) · restart to apply"
   exit 0
 fi
 

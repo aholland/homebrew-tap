@@ -2,6 +2,7 @@ cask "claude-code-punctilio" do
   arch arm: "arm64", intel: "x64"
   os macos: "darwin", linux: "linux"
 
+  # Anthropic uploaded this release at 2026-11-24T22:02:22Z
   version "2.1.332"
   sha256 arm:          "5b8214f8f082f3187420b27b4063b9b4f4d9412cd66ea436d6d1966ad582700f",
          x86_64:       "3ceb285194091d45b150561ac5d58ab5a58cddcdc6d086f883039a652c037cfa",
